@@ -484,6 +484,16 @@ impl DestinationElder {
                     // TODO - Verify ownership
                 }
                 kind
+            })
+            .and_then(|kind| {
+                if address.published() != kind.published() {
+                    // TODO - Replace this error with NdError::UnexpectedDataReturned?
+                    Err(NdError::NetworkOther(
+                        "Retreived immutable data is of wrong kind".to_string(),
+                    ))
+                } else {
+                    Ok(kind)
+                }
             });
         Some(Action::RespondToOurDstElders {
             sender: *self.id.name(),
