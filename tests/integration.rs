@@ -56,8 +56,9 @@ mod common;
 use self::common::{Environment, TestClient, TestVault};
 use rand::Rng;
 use safe_nd::{
-    Coins, Error as NdError, IData, IDataAddress, LoginPacket, PubImmutableData, Request, Response,
-    UnpubImmutableData, XorName,
+    AData, Coins, Error as NdError, IData, IDataAddress, LoginPacket, PubImmutableData,
+    PubSeqAppendOnlyData, PubUnseqAppendOnlyData, Request, Response, SeqAppendOnly,
+    UnpubImmutableData, UnpubSeqAppendOnlyData, UnpubUnseqAppendOnlyData, UnseqAppendOnly, XorName,
 };
 use safe_vault::COST_OF_PUT;
 use unwrap::unwrap;
@@ -317,6 +318,78 @@ fn coin_operations() {
     let balance_b = common::get_balance(&mut env, &mut client_b, &mut vault);
     assert_eq!(balance_a, unwrap!(Coins::from_nano(7)));
     assert_eq!(balance_b, unwrap!(Coins::from_nano(3)));
+}
+
+#[test]
+fn put_append_only_data() {
+    let mut env = Environment::new();
+    let mut vault = TestVault::new();
+
+    let mut client = TestClient::new(env.rng());
+    common::establish_connection(&mut env, &mut client, &mut vault);
+
+    let start_nano = 1_000_000_000_000;
+    let new_balance_owner = *client.public_id().public_key();
+    common::perform_transaction(
+        &mut env,
+        &mut client,
+        &mut vault,
+        Request::CreateBalance {
+            new_balance_owner,
+            amount: unwrap!(Coins::from_nano(start_nano)),
+            transaction_id: 0,
+        },
+    );
+
+    // Seq
+    let adata_name: XorName = env.rng().gen();
+    let tag = 100;
+    let mut adata = PubSeqAppendOnlyData::new(adata_name, tag);
+    unwrap!(adata.append(&[(b"more".to_vec(), b"data".to_vec())], 0));
+    common::perform_mutation(
+        &mut env,
+        &mut client,
+        &mut vault,
+        Request::PutAData(AData::PubSeq(adata)),
+    );
+
+    // Unseq
+    let adata_name: XorName = env.rng().gen();
+    let tag = 101;
+    let mut adata = PubUnseqAppendOnlyData::new(adata_name, tag);
+    unwrap!(adata.append(&[(b"more".to_vec(), b"data".to_vec())]));
+    common::perform_mutation(
+        &mut env,
+        &mut client,
+        &mut vault,
+        Request::PutAData(AData::PubUnseq(adata)),
+    );
+
+    // Unpub Seq
+    let adata_name: XorName = env.rng().gen();
+    let tag = 102;
+    let mut adata = UnpubSeqAppendOnlyData::new(adata_name, tag);
+    unwrap!(adata.append(&[(b"more".to_vec(), b"data".to_vec())], 0));
+    common::perform_mutation(
+        &mut env,
+        &mut client,
+        &mut vault,
+        Request::PutAData(AData::UnpubSeq(adata)),
+    );
+
+    // Unpub Unseq
+    let adata_name: XorName = env.rng().gen();
+    let tag = 103;
+    let mut adata = UnpubUnseqAppendOnlyData::new(adata_name, tag);
+    unwrap!(adata.append(&[(b"more".to_vec(), b"data".to_vec())]));
+    common::perform_mutation(
+        &mut env,
+        &mut client,
+        &mut vault,
+        Request::PutAData(AData::UnpubUnseq(adata)),
+    );
+
+    // TODO - get the data to verify
 }
 
 #[test]

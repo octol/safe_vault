@@ -23,9 +23,9 @@ use lazy_static::lazy_static;
 use log::{error, info, trace, warn};
 use pickledb::PickleDb;
 use safe_nd::{
-    AppPermissions, Challenge, Coins, Error as NdError, IData, IDataAddress, IDataKind, Message,
-    MessageId, NodePublicId, PublicId, PublicKey, Request, Response, Signature, Transaction,
-    TransactionId, XorName,
+    AData, AppPermissions, Challenge, Coins, Error as NdError, IData, IDataAddress, IDataKind,
+    Message, MessageId, NodePublicId, PublicId, PublicKey, Request, Response, Signature,
+    Transaction, TransactionId, XorName,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -247,7 +247,7 @@ impl SourceElder {
             //
             // ===== Append Only Data =====
             //
-            PutAData(_) => unimplemented!(),
+            PutAData(chunk) => self.handle_put_adata(client, chunk, message_id, signature),
             GetAData(ref address) => unimplemented!(),
             GetADataShell { ref address, .. } => unimplemented!(),
             DeleteAData(ref address) => unimplemented!(),
@@ -485,6 +485,35 @@ impl SourceElder {
             );
             None
         }
+    }
+
+    fn handle_put_adata(
+        &mut self,
+        client: &ClientInfo,
+        chunk: AData,
+        message_id: MessageId,
+        signature: Option<Signature>,
+    ) -> Option<Action> {
+        let owner = utils::owner(&client.public_id)?;
+        // TODO - If unpublished, check that the owner's public key has been added to the chunk?
+        let request = Request::PutAData(chunk);
+        self.has_signature(&client.public_id, &request, &message_id, &signature)?;
+
+        if let Err(error) = self.withdraw(owner.public_key(), *COST_OF_PUT) {
+            // Note: in phase 1, we proceed even if there are insufficient funds.
+            trace!(
+                "{}: Unable to withdraw {} coins (but allowing the request anyway): {}",
+                self,
+                *COST_OF_PUT,
+                error
+            );
+        }
+
+        Some(Action::ForwardClientRequest(Rpc::Request {
+            requester: client.public_id.clone(),
+            request,
+            message_id,
+        }))
     }
 
     /// Handles a received challenge response.
