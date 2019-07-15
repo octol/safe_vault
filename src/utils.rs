@@ -128,3 +128,15 @@ pub(crate) fn dst_elders_address(request: &Request) -> Option<&XorName> {
         | DelAuthKey { .. } => None,
     }
 }
+
+/// Temporary helpers to work around changes required in safe-nd.
+pub(crate) mod work_arounds {
+    use safe_nd::ADataKind;
+
+    pub fn is_adata_kind_pub(kind: ADataKind) -> bool {
+        match kind {
+            ADataKind::PubSeq | ADataKind::PubUnseq => true,
+            ADataKind::UnpubSeq | ADataKind::UnpubUnseq => false,
+        }
+    }
+}

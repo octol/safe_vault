@@ -23,8 +23,8 @@ use lazy_static::lazy_static;
 use log::{error, info, trace, warn};
 use pickledb::PickleDb;
 use safe_nd::{
-    AData, AppPermissions, Challenge, Coins, Error as NdError, IData, IDataAddress, IDataKind,
-    Message, MessageId, NodePublicId, PublicId, PublicKey, Request, Response, Signature,
+    AData, ADataAddress, AppPermissions, Challenge, Coins, Error as NdError, IData, IDataAddress,
+    IDataKind, Message, MessageId, NodePublicId, PublicId, PublicKey, Request, Response, Signature,
     Transaction, TransactionId, XorName,
 };
 use serde::{Deserialize, Serialize};
@@ -250,7 +250,9 @@ impl SourceElder {
             PutAData(chunk) => self.handle_put_adata(client, chunk, message_id, signature),
             GetAData(ref address) => unimplemented!(),
             GetADataShell { ref address, .. } => unimplemented!(),
-            DeleteAData(ref address) => unimplemented!(),
+            DeleteAData(address) => {
+                self.handle_delete_adata(client, address, message_id, signature)
+            }
             GetADataRange { ref address, .. } => unimplemented!(),
             GetADataIndices(ref address) => unimplemented!(),
             GetADataLastEntry(ref address) => unimplemented!(),
@@ -514,6 +516,39 @@ impl SourceElder {
             request,
             message_id,
         }))
+    }
+
+    fn handle_delete_adata(
+        &mut self,
+        client: &ClientInfo,
+        address: ADataAddress,
+        message_id: MessageId,
+        signature: Option<Signature>,
+    ) -> Option<Action> {
+        if utils::work_arounds::is_adata_kind_pub(address.kind()) {
+            self.send_response_to_client(
+                &client.public_id,
+                message_id,
+                Response::Mutation(Err(NdError::InvalidOperation)),
+            );
+            return None;
+        }
+        let request = Request::DeleteAData(address);
+        self.has_signature(&client.public_id, &request, &message_id, &signature)?;
+        if client.has_balance {
+            Some(Action::ForwardClientRequest(Rpc::Request {
+                requester: client.public_id.clone(),
+                request,
+                message_id,
+            }))
+        } else {
+            self.send_response_to_client(
+                &client.public_id,
+                message_id,
+                Response::Mutation(Err(NdError::AccessDenied)),
+            );
+            None
+        }
     }
 
     /// Handles a received challenge response.

@@ -346,50 +346,82 @@ fn put_append_only_data() {
     let tag = 100;
     let mut adata = PubSeqAppendOnlyData::new(adata_name, tag);
     unwrap!(adata.append(&[(b"more".to_vec(), b"data".to_vec())], 0));
-    common::perform_mutation(
-        &mut env,
-        &mut client,
-        &mut vault,
-        Request::PutAData(AData::PubSeq(adata)),
-    );
+    let adata = AData::PubSeq(adata);
+    let pub_seq_adata_address = *adata.address();
+    common::perform_mutation(&mut env, &mut client, &mut vault, Request::PutAData(adata));
 
     // Unseq
     let adata_name: XorName = env.rng().gen();
     let tag = 101;
     let mut adata = PubUnseqAppendOnlyData::new(adata_name, tag);
     unwrap!(adata.append(&[(b"more".to_vec(), b"data".to_vec())]));
-    common::perform_mutation(
-        &mut env,
-        &mut client,
-        &mut vault,
-        Request::PutAData(AData::PubUnseq(adata)),
-    );
+    let adata = AData::PubUnseq(adata);
+    let pub_unseq_adata_address = *adata.address();
+    common::perform_mutation(&mut env, &mut client, &mut vault, Request::PutAData(adata));
 
     // Unpub Seq
     let adata_name: XorName = env.rng().gen();
     let tag = 102;
     let mut adata = UnpubSeqAppendOnlyData::new(adata_name, tag);
     unwrap!(adata.append(&[(b"more".to_vec(), b"data".to_vec())], 0));
-    common::perform_mutation(
-        &mut env,
-        &mut client,
-        &mut vault,
-        Request::PutAData(AData::UnpubSeq(adata)),
-    );
+    let adata = AData::UnpubSeq(adata);
+    let unpub_seq_adata_address = *adata.address();
+    common::perform_mutation(&mut env, &mut client, &mut vault, Request::PutAData(adata));
 
     // Unpub Unseq
     let adata_name: XorName = env.rng().gen();
     let tag = 103;
     let mut adata = UnpubUnseqAppendOnlyData::new(adata_name, tag);
     unwrap!(adata.append(&[(b"more".to_vec(), b"data".to_vec())]));
+    let adata = AData::UnpubUnseq(adata);
+    let unpub_unseq_adata_address = *adata.address();
+    common::perform_mutation(&mut env, &mut client, &mut vault, Request::PutAData(adata));
+
+    // TODO - get the data to verify
+
+    // Delete the data
+    common::send_request_expect_err(
+        &mut env,
+        &mut client,
+        &mut vault,
+        Request::DeleteAData(pub_seq_adata_address),
+        Response::Mutation(Err(NdError::InvalidOperation)),
+    );
+    common::send_request_expect_err(
+        &mut env,
+        &mut client,
+        &mut vault,
+        Request::DeleteAData(pub_unseq_adata_address),
+        Response::Mutation(Err(NdError::InvalidOperation)),
+    );
     common::perform_mutation(
         &mut env,
         &mut client,
         &mut vault,
-        Request::PutAData(AData::UnpubUnseq(adata)),
+        Request::DeleteAData(unpub_seq_adata_address),
+    );
+    common::perform_mutation(
+        &mut env,
+        &mut client,
+        &mut vault,
+        Request::DeleteAData(unpub_unseq_adata_address),
     );
 
-    // TODO - get the data to verify
+    // Delete again to test if it's gone
+    common::send_request_expect_err(
+        &mut env,
+        &mut client,
+        &mut vault,
+        Request::DeleteAData(unpub_seq_adata_address),
+        Response::Mutation(Err(NdError::NoSuchData)),
+    );
+    common::send_request_expect_err(
+        &mut env,
+        &mut client,
+        &mut vault,
+        Request::DeleteAData(unpub_unseq_adata_address),
+        Response::Mutation(Err(NdError::NoSuchData)),
+    );
 }
 
 #[test]
