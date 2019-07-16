@@ -131,7 +131,10 @@ pub(crate) fn dst_elders_address(request: &Request) -> Option<&XorName> {
 
 /// Temporary helpers to work around changes required in safe-nd.
 pub(crate) mod work_arounds {
-    use safe_nd::ADataKind;
+    use safe_nd::{
+        ADataKind, ADataUnpubPermissions, AppendOnlyData, Error as NdError, PublicKey,
+        Result as NdResult,
+    };
 
     pub fn is_adata_kind_pub(kind: ADataKind) -> bool {
         match kind {
@@ -139,4 +142,21 @@ pub(crate) mod work_arounds {
             ADataKind::UnpubSeq | ADataKind::UnpubUnseq => false,
         }
     }
+
+    pub fn is_owner<T: AppendOnlyData<ADataUnpubPermissions>>(
+        adata: T,
+        requester: PublicKey,
+    ) -> NdResult<()> {
+        adata
+            .fetch_owner_at_index(adata.owners_index() - 1)
+            .ok_or_else(|| NdError::NoSuchData)
+            .and_then(|owner| {
+                if owner.public_key == requester {
+                    Ok(())
+                } else {
+                    Err(NdError::AccessDenied)
+                }
+            })
+    }
+
 }
