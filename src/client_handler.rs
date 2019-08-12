@@ -1231,14 +1231,35 @@ impl ClientHandler {
             return None;
         }
 
+        let sender = *login_packet.destination();
         let request = Request::CreateLoginPacket(login_packet);
-        self.pay(
-            client_id,
-            utils::client(client_id)?.public_key(),
-            &request,
-            message_id,
-            *COST_OF_PUT,
-        )?;
+
+        // For Phase 1 we'll have a simplified flow where instead of paying for creating the
+        // LoginPacket, we create the balance that was supposed to be paying for it.
+        if false {
+            self.pay(
+                client_id,
+                utils::client(client_id)?.public_key(),
+                &request,
+                message_id,
+                *COST_OF_PUT,
+            )?;
+        } else {
+            match self.create_balance(*utils::client(client_id)?.public_key(), *COST_OF_PUT) {
+                Err(NdError::BalanceExists) => info!("Balance already exists"),
+                Err(err) => {
+                    return Some(Action::RespondToClientHandlers {
+                        sender,
+                        rpc: Rpc::Response {
+                            response: Response::Mutation(Err(err)),
+                            requester: client_id.clone(),
+                            message_id,
+                        },
+                    })
+                }
+                Ok(_) => (),
+            }
+        }
 
         Some(Action::ForwardClientRequest(Rpc::Request {
             requester: client_id.clone(),
