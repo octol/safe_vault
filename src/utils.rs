@@ -131,6 +131,8 @@ pub(crate) fn destination_address(request: &Request) -> Option<Cow<XorName>> {
             ref new_balance_owner,
             ..
         } => Some(Cow::Owned(XorName::from(*new_balance_owner))),
+        #[cfg(feature = "testing")]
+        TestCreateBalance { ref owner, .. } => Some(Cow::Owned(XorName::from(*owner))),
         CreateLoginPacket(login_packet) => Some(Cow::Borrowed(login_packet.destination())),
         CreateLoginPacketFor {
             new_login_packet, ..
@@ -178,6 +180,8 @@ pub(crate) fn authorisation_kind(request: &Request) -> AuthorisationKind {
         | UpdateLoginPacket(_)
         | InsAuthKey { .. }
         | DelAuthKey { .. } => Mut,
+        #[cfg(feature = "testing")]
+        TestCreateBalance { .. } => Mut,
         GetIData(IDataAddress::Pub(_)) => GetPub,
         GetIData(IDataAddress::Unpub(_))
         | GetMData(_)

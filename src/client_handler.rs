@@ -322,6 +322,13 @@ impl ClientHandler {
                 transaction_id,
                 message_id,
             ),
+            #[cfg(feature = "testing")]
+            TestCreateBalance { owner, amount } => self.handle_test_create_balance_client_req(
+                &client.public_id,
+                owner,
+                amount,
+                message_id,
+            ),
             //
             // ===== Login packets =====
             //
@@ -767,6 +774,10 @@ impl ClientHandler {
                 transaction_id,
                 message_id,
             ),
+            #[cfg(feature = "testing")]
+            TestCreateBalance { owner, amount } => {
+                self.handle_test_create_balance_vault_req(requester, owner, amount, message_id)
+            }
             TransferCoins {
                 destination,
                 amount,
@@ -1036,6 +1047,40 @@ impl ClientHandler {
         Some(Action::RespondToClientHandlers {
             sender: *self.id.name(),
             rpc,
+        })
+    }
+
+    #[cfg(feature = "testing")]
+    fn handle_test_create_balance_client_req(
+        &mut self,
+        requester: &PublicId,
+        owner: PublicKey,
+        amount: Coins,
+        message_id: MessageId,
+    ) -> Option<Action> {
+        Some(Action::ForwardClientRequest(Rpc::Request {
+            request: Request::TestCreateBalance { owner, amount },
+            requester: requester.clone(),
+            message_id,
+        }))
+    }
+
+    #[cfg(feature = "testing")]
+    fn handle_test_create_balance_vault_req(
+        &mut self,
+        requester: PublicId,
+        owner: PublicKey,
+        amount: Coins,
+        message_id: MessageId,
+    ) -> Option<Action> {
+        let result = self.create_balance(owner, amount);
+        Some(Action::RespondToClientHandlers {
+            sender: *self.id.name(),
+            rpc: Rpc::Response {
+                response: Response::Mutation(result),
+                requester,
+                message_id,
+            },
         })
     }
 

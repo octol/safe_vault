@@ -287,6 +287,14 @@ impl DataHandler {
                 );
                 None
             }
+            #[cfg(feature = "testing")]
+            TestCreateBalance { .. } => {
+                error!(
+                    "{}: Should not receive {:?} as a data handler.",
+                    self, request
+                );
+                None
+            }
         }
     }
 

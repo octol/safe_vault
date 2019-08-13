@@ -3,3 +3,4 @@
 set -e -x
 
 cargo test $@ --release --features=mock --no-default-features
+cargo test $@ --release --features=testing --no-default-features
