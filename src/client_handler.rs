@@ -45,13 +45,12 @@ use unwrap::unwrap;
 
 lazy_static! {
     /// The cost to Put a chunk to the network.
-    pub static ref COST_OF_PUT: Coins = unwrap!(Coins::from_nano(1_000_000_000));
+    pub static ref COST_OF_PUT: Coins = unwrap!(Coins::from_nano(1));
 }
 
 #[derive(Clone, Debug)]
 struct ClientInfo {
     public_id: PublicId,
-    has_balance: bool,
 }
 
 pub(crate) struct ClientHandler {
@@ -681,18 +680,8 @@ impl ClientHandler {
                         return;
                     }
 
-                    let has_balance = self.has_balance(&public_id);
-                    info!(
-                        "{}: Accepted {} on {}. Has balance: {}",
-                        self, public_id, peer_addr, has_balance
-                    );
-                    let _ = self.clients.insert(
-                        peer_addr,
-                        ClientInfo {
-                            public_id,
-                            has_balance,
-                        },
-                    );
+                    info!("{}: Accepted {} on {}.", self, public_id, peer_addr,);
+                    let _ = self.clients.insert(peer_addr, ClientInfo { public_id });
                 }
                 Err(err) => {
                     info!(
@@ -708,20 +697,6 @@ impl ClientHandler {
                 self, public_id, peer_addr
             );
             self.quic_p2p.disconnect_from(peer_addr);
-        }
-    }
-
-    fn has_balance(&self, public_id: &PublicId) -> bool {
-        match public_id {
-            PublicId::Client(pub_id) => self.balances.exists(pub_id.name()),
-            PublicId::App(app_pub_id) => {
-                self.balances.exists(app_pub_id.owner().name())
-                    && self.auth_keys.app_permissions(app_pub_id).is_some()
-            }
-            PublicId::Node(_) => {
-                error!("{}: Logic error. This should be unreachable.", self);
-                false
-            }
         }
     }
 
@@ -1102,13 +1077,6 @@ impl ClientHandler {
         } else {
             let balance = Balance { coins: amount };
             self.put_balance(&owner_key, &balance)?;
-            for client in self
-                .clients
-                .values_mut()
-                .filter(|client| client.public_id.name() == &XorName::from(owner_key))
-            {
-                client.has_balance = true;
-            }
             Ok(())
         }
     }
@@ -1208,6 +1176,12 @@ impl ClientHandler {
     }
 
     fn put_balance(&mut self, public_key: &PublicKey, balance: &Balance) -> Result<(), NdError> {
+        trace!(
+            "{}: Setting balance to {} for {}",
+            self,
+            balance,
+            public_key
+        );
         self.balances.put(public_key, balance).map_err(|error| {
             error!(
                 "{}: Failed to update balance of {}: {}",
@@ -1227,19 +1201,11 @@ impl ClientHandler {
         message_id: MessageId,
         cost: Coins,
     ) -> Option<()> {
+        trace!("{}: {} is paying {} coins", self, requester_id, cost);
         match self.withdraw(requester_key, cost) {
             Ok(()) => Some(()),
-            Err(NdError::InsufficientBalance) | Err(NdError::NoSuchBalance) => {
-                // Note: in phase 1, we proceed even if there are insufficient funds.
-                trace!(
-                    "{}: Insufficient balance to withdraw {} coins (but allowing the request \
-                     anyway)",
-                    self,
-                    cost,
-                );
-                Some(())
-            }
             Err(error) => {
+                trace!("{}: Unable to withdraw {} coins: {}", self, cost, error);
                 self.send_response_to_client(
                     requester_id,
                     message_id,
