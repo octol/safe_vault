@@ -115,6 +115,7 @@ impl ClientHandler {
                 );
             }
         }
+        println!("Waiting for connections ...");
 
         Ok((quic_p2p, event_receiver))
     }
@@ -150,6 +151,8 @@ impl ClientHandler {
         );
         let _ = self.client_candidates.insert(peer.peer_addr(), challenge);
         info!("{}: Connected to new client on {}", self, peer_addr);
+        // For end users
+        println!("Connected to new client on {}", peer_addr);
     }
 
     pub fn handle_connection_failure(&mut self, peer_addr: SocketAddr, error: Error) {
