@@ -20,8 +20,10 @@ use safe_nd::{
     MessageId, Notification, PublicId, PublicKey, Request, Response, Signature, Transaction,
     TransactionId,
 };
+#[cfg(feature = "mock")]
+use safe_vault::mock_routing::{ConsensusGroup, ConsensusGroupRef};
 use safe_vault::{
-    routing::{ConsensusGroup, ConsensusGroupRef, Node},
+    routing::Node,
     Command, Config, Vault,
 };
 use serde::Serialize;
@@ -36,7 +38,7 @@ use tempdir::TempDir;
 use unwrap::unwrap;
 
 /// Default number of vaults to run the tests with.
-const DEFAULT_NUM_VAULTS: usize = 5;
+const DEFAULT_NUM_VAULTS: usize = 1;
 
 macro_rules! unexpected {
     ($e:expr) => {
@@ -48,6 +50,7 @@ pub struct Environment {
     rng: TestRng,
     network: Network,
     vaults: Vec<TestVault>,
+    #[cfg(not(feature = "mock-parsec"))]
     _consensus_group: ConsensusGroupRef,
 }
 
@@ -57,21 +60,25 @@ impl Environment {
 
         let network = Network::new(Default::default());
 
-        let consensus_group = ConsensusGroup::new();
-        let vaults = if num_vaults > 1 {
-            let mut vaults = Vec::with_capacity(num_vaults);
-            for _ in 0..num_vaults {
-                vaults.push(TestVault::new(Some(consensus_group.clone())));
-            }
-            vaults
-        } else {
-            vec![TestVault::new(None)]
-        };
+        //let consensus_group = ConsensusGroup::new();
+        //let vaults = if num_vaults > 1 {
+        //    let mut vaults = Vec::with_capacity(num_vaults);
+        //    for _ in 0..num_vaults {
+        //        vaults.push(TestVault::new(Some(consensus_group.clone())));
+        //    }
+        //    vaults
+        //} else {
+        //    vec![TestVault::new(None)]
+        //};
+
+        // WIP: just one Vault for now
+        let vaults = vec![TestVault::new_without_consensus_group()];
 
         Self {
             rng: rng::new(),
             network,
             vaults,
+            #[cfg(not(feature = "mock-parsec"))]
             _consensus_group: consensus_group,
         }
     }
@@ -132,6 +139,7 @@ struct TestVault {
 
 impl TestVault {
     /// Create a test Vault within a group.
+    #[cfg(feature = "mock")]
     fn new(consensus_group: Option<ConsensusGroupRef>) -> Self {
         let root_dir = unwrap!(TempDir::new("safe_vault"));
 
@@ -145,6 +153,25 @@ impl TestVault {
         } else {
             unwrap!(Node::builder().create())
         };
+        let inner = unwrap!(Vault::new(routing_node, routing_rx, config, command_rx));
+
+        Self {
+            inner,
+            _root_dir: root_dir,
+            _command_tx: command_tx,
+        }
+    }
+
+    #[cfg(feature = "mock-parsec")]
+    fn new_without_consensus_group() -> Self {
+        let root_dir = unwrap!(TempDir::new("safe_vault"));
+
+        let mut config = Config::default();
+        config.set_root_dir(root_dir.path());
+
+        let (command_tx, command_rx) = crossbeam_channel::bounded(0);
+
+        let (routing_node, routing_rx) = unwrap!(Node::builder().create());
         let inner = unwrap!(Vault::new(routing_node, routing_rx, config, command_rx));
 
         Self {
